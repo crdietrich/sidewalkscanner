@@ -2,50 +2,89 @@
 Colin Dietrich 2019
 """
 import itertools
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
 
-def plot_history(history):
-    loss_list = [s for s in history.history.keys() if 'loss' in s and 'val' not in s]
-    val_loss_list = [s for s in history.history.keys() if 'loss' in s and 'val' in s]
-    acc_list = [s for s in history.history.keys() if 'acc' in s and 'val' not in s]
-    val_acc_list = [s for s in history.history.keys() if 'acc' in s and 'val' in s]
+def plot_history(history, k=1, description="", folder_path=None):
+
+    if isinstance(history, list):
+
+        loss_list = []
+        acc_list = []
+        val_loss_list = []
+        val_acc_list = []
+        k_fold = []
+        k_epoch = []
+
+        for k, h in enumerate(history):
+            loss_list = loss_list + h.history['loss']
+            acc_list = acc_list + h.history['acc']
+            val_loss_list = val_loss_list + h.history['val_loss']
+            val_acc_list = val_acc_list + h.history['val_acc']
+            k_fold = k_fold + [k] * len(h.history['loss'])
+            k_epoch = k_epoch + h.epoch
+    else:
+        loss_list = history.history['loss']
+        acc_list = history.history['acc']
+        val_loss_list = history.history['val_loss']
+        val_acc_list = history.history['val_acc']
+        k_fold = len(history.history['loss'])
+        k_epoch = history.epoch
+
+    # As loss always exists
+    epochs = range(1, len(loss_list) + 1)
+
+    # loss_list = [s for s in history.history.keys() if 'loss' in s and 'val' not in s]
+    # acc_list = [s for s in history.history.keys() if 'acc' in s and 'val' not in s]
+
+    # val_loss_list = [s for s in history.history.keys() if 'loss' in s and 'val' in s]
+    # val_acc_list = [s for s in history.history.keys() if 'acc' in s and 'val' in s]
 
     if len(loss_list) == 0:
         print('Loss is missing in history')
         return
 
-    # As loss always exists
-    epochs = range(1, len(history.history[loss_list[0]]) + 1)
-
     # Loss
-    plt.figure(1)
+    plt.figure(1, figsize=(10, 8))
+    """
     for l in loss_list:
         plt.plot(epochs, history.history[l], 'b',
-                 label='Training loss (' + str(str(format(history.history[l][-1], '.5f')) + ')'))
+                 label='Training loss')  # (' + str(str(format(history.history[l][-1], '.5f')) + ')'))
     for l in val_loss_list:
         plt.plot(epochs, history.history[l], 'g',
-                 label='Validation loss (' + str(str(format(history.history[l][-1], '.5f')) + ')'))
+                 label='Validation loss')  # (' + str(str(format(history.history[l][-1], '.5f')) + ')'))
+    """
+    plt.plot(epochs, loss_list, 'b', label='Training Loss')
+    plt.plot(epochs, val_loss_list, 'g', label='Validation Loss')
 
-    plt.title('VGG16 Model Loss')
+    plt.title('{} Model Loss'.format(description))
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.legend()
+    if folder_path is not None:
+        plt.savefig(folder_path + os.path.sep + 'model_training_loss_kfold_{}.jpg'.format(k))
 
     # Accuracy
-    plt.figure(2)
+    plt.figure(2, figsize=(10, 8))
+    """
     for l in acc_list:
         plt.plot(epochs, history.history[l], 'b',
                  label='Training accuracy (' + str(format(history.history[l][-1], '.5f')) + ')')
     for l in val_acc_list:
         plt.plot(epochs, history.history[l], 'g',
                  label='Validation accuracy (' + str(format(history.history[l][-1], '.5f')) + ')')
+    """
+    plt.plot(epochs, acc_list, 'b', label='Training Accuracy')
+    plt.plot(epochs, val_acc_list, 'g', label='Validation Accuracy')
 
-    plt.title('VGG16 Model Accuracy')
+    plt.title('{} Model Accuracy'.format(description))
     plt.xlabel('Epochs')
     plt.ylabel('Accuracy')
     plt.legend()
+    if folder_path is not None:
+        plt.savefig(folder_path + os.path.sep + 'model_training_accuracy_kfold_{}.jpg'.format(k))
     plt.show()
 
 

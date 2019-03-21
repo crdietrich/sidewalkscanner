@@ -38,6 +38,10 @@ number_of_train_samples      = 3400
 number_of_validation_samples = 1200
 number_of_test_samples       = 400
 
-# ===== Training Batch =====
-epochs = 1
+# ===== Training Attributes =====
+learning_rate = 1e-4
+momentum = 0.2
+k_folds = 1
+epochs = 100
 batch_size = 32
+frozen_layers = 5  # or number of layers

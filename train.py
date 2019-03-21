@@ -4,15 +4,43 @@ Colin Dietrich 2019
 
 import os
 import pickle
+import numpy as np
+import sklearn.metrics # import confusion_matrix, f1_score, precision_score, recall_score
 from datetime import datetime
 from keras import Model, applications
 from keras.preprocessing.image import ImageDataGenerator
 from keras import optimizers
 from keras.models import Sequential
 from keras.layers import Flatten, Dense
-from keras.callbacks import ModelCheckpoint
+from keras.callbacks import ModelCheckpoint, Callback, TensorBoard
 
 import config
+
+
+class CallbackMetrics(Callback):
+
+    def __init__(self):
+        super().__init__()
+        self.val_f1s = None
+        self.val_recalls = None
+        self.val_precisions = None
+
+    def on_train_begin(self, logs={}):
+        self.val_f1s = []
+        self.val_recalls = []
+        self.val_precisions = []
+
+    def on_epoch_end(self, epoch, logs={}):
+        val_predict = (np.asarray(self.model.predict(self.model.validation_data[0]))).round()
+        val_targ = self.model.validation_data[1]
+        _val_f1 = sklearn.metrics.f1_score(val_targ, val_predict)
+        _val_recall = sklearn.metrics.recall_score(val_targ, val_predict)
+        _val_precision = sklearn.metrics.precision_score(val_targ, val_predict)
+        self.val_f1s.append(_val_f1)
+        self.val_recalls.append(_val_recall)
+        self.val_precisions.append(_val_precision)
+        print(" — val_f1: {} — val_precision: {} — val_recall {}".format(_val_f1, _val_precision, _val_recall))
+        return
 
 
 def _struct_time():
@@ -67,11 +95,21 @@ def find_max_batch(n_samples, max_size=33, verbose=False):
     return max_batch_size
 
 
-def build_model():
+def build_model_VGG16(verbose=False):
     """Build a model based on VGG16 and ImageNet weights."""
     base_model = applications.VGG16(weights='imagenet',
                                     include_top=False,
                                     input_shape=config.input_shape)
+
+    # Freeze the layers which you don't want to train. Here I am freezing the first 5 layers.
+    # for layer in model.layers[:5]:
+    # https://medium.com/@14prakash/transfer-learning-using-keras-d804b2e04ef8
+
+    n_layers = len(base_model.layers)
+    if config.frozen_layers != 'all':
+        n_layers = config.frozen_layers
+    for layer in base_model.layers[:n_layers]:
+        layer.trainable = False
 
     top_model = Sequential()
     top_model.add(Flatten(input_shape=base_model.output_shape[1:]))
@@ -80,8 +118,51 @@ def build_model():
 
     model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
     model.compile(loss='binary_crossentropy',
-                  optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
+                  optimizer=optimizers.SGD(lr=config.learning_rate, momentum=config.momentum),
                   metrics=['accuracy'])
+
+    if verbose:
+        print('Trainable Layer Summary')
+        print('=======================')
+        for layer in model.layers:
+            conf = layer.get_config()
+            print(conf['name'], '\t : ', layer.trainable)
+
+    return model
+
+
+def build_model_inceptionV3(freeze=-1, verbose=False):
+    """Build a model based on VGG16 and ImageNet weights."""
+    base_model = applications.inception_v3.InceptionV3(weights='imagenet',
+                                                       include_top=False,
+                                                       input_shape=config.input_shape)
+
+    # Freeze the layers which you don't want to train. Here I am freezing the first 5 layers.
+    # for layer in model.layers[:5]:
+    # https://medium.com/@14prakash/transfer-learning-using-keras-d804b2e04ef8
+
+    #n_layers = len(base_model.layers)
+    #if config.frozen_layers != 'all':
+    #    n_layers = config.frozen_layers
+    for layer in base_model.layers[:config.frozen_layers]:
+        layer.trainable = False
+
+    top_model = Sequential()
+    top_model.add(Flatten(input_shape=base_model.output_shape[1:]))
+    top_model.add(Dense(256, activation='relu'))
+    top_model.add(Dense(1, activation='sigmoid'))
+
+    model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
+    model.compile(loss='binary_crossentropy',
+                  optimizer=optimizers.SGD(lr=config.learning_rate, momentum=config.momentum),
+                  metrics=['accuracy'])
+
+    if verbose:
+        print('Trainable Layer Summary')
+        print('=======================')
+        for layer in model.layers:
+            conf = layer.get_config()
+            print(conf['name'], '\t : ', layer.trainable)
 
     return model
 
@@ -103,9 +184,13 @@ def build_generators(tune_batch_size=False):
 
     train_datagen = ImageDataGenerator(
         rescale=1. / 255,
-        shear_range=0.2,
-        zoom_range=0.2,
-        horizontal_flip=True)
+        rotation_range=45,  # degree for random rotations
+        shear_range=45,    # shear angle in counter-clockwise direction in degrees
+        zoom_range=0.2,     # range for random zoom
+        fill_mode='nearest',   # points outside boundaries of inputs are filled
+        horizontal_flip=True,  # randomly horizontally flip
+        vertical_flip=True,    # randomly vertically flip
+        )
 
     validation_datagen = ImageDataGenerator(rescale=1. / 255)
 
@@ -140,22 +225,37 @@ def train_model(model, train_generator, validation_generator, model_description)
 
     make_dir(training_output_dir)
 
-    callback_file_path = os.path.normpath(training_output_dir + model_description +
+    callback_file_path = os.path.normpath(training_output_dir + os.path.sep + model_description +
                                           "_weights_improvement_{epoch:02d}-{val_acc:.2f}.hdf5")
 
-    checkpoint = ModelCheckpoint(callback_file_path, monitor='val_acc',
-                                 verbose=1, save_best_only=True, mode='max')
-    callbacks_list = [checkpoint]
+    callback_checkpoint = ModelCheckpoint(callback_file_path,
+                                          monitor='acc', mode='auto',  # or monitor='val_acc' ?
+                                          verbose=1, save_best_only=True)
 
-    model_history = model.fit_generator(
-        train_generator,
-        steps_per_epoch=config.number_of_train_samples // config.batch_size,
-        epochs=config.epochs,
-        shuffle=True,
-        validation_data=validation_generator,
-        validation_steps=config.number_of_validation_samples // config.batch_size,
-        workers=12,
-        callbacks=callbacks_list)
+    callback_metrics = CallbackMetrics()
+
+    callback_tensorboard = TensorBoard(log_dir=training_output_dir,
+                                       histogram_freq=1,
+                                       write_graph=True, write_images=True,
+                                       embeddings_freq=1,
+                                       )
+                                       #update_freq='epoch')
+
+    callbacks_list = [callback_checkpoint] #, callback_tensorboard]  # callback_metrics
+
+    model_history = []
+    for i in range(config.k_folds):
+
+        m_history = model.fit_generator(
+            train_generator,
+            steps_per_epoch=config.number_of_train_samples // config.batch_size,
+            epochs=config.epochs,
+            shuffle=True,
+            validation_data=validation_generator,
+            validation_steps=config.number_of_validation_samples // config.batch_size,
+            workers=12,
+            callbacks=callbacks_list)
+        model_history.append(m_history)
 
     model.save(os.path.normpath(training_output_dir + model_description +
                                 '_model_complete_' + file_time() + '.h5'))
@@ -171,10 +271,10 @@ def train_model(model, train_generator, validation_generator, model_description)
     return model_history
 
 
-def build_run(model_description):
+def build_run(model_description, verbose=False):
     """Build and run model fit"""
 
-    model = build_model()
+    model = build_model(verbose=verbose)
     train_gen, validation_gen, test_gen = build_generators()
     history = train_model(model=model,
                           train_generator=train_gen,

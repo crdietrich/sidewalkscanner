@@ -20,8 +20,8 @@ import bokeh.models as bkm
 df_obs = pd.read_csv('city_of_seattle_2018_observations.csv')
 
 # ===== DataCyle =====
-#df_crd = pd.read_csv('image_gps.csv')  # complete full resolution
-df_crd = pd.read_csv('image_gps_second.csv')  # decimated to second resolution
+# df_crd = pd.read_csv('image_gps.csv')  # complete full resolution
+df_crd = pd.read_csv('image_gps_second_A.csv')  # decimated to second resolution
 df_crd_source_dir = "http://juniperengineering.com/stream_images_2019_02_05_224x224/"
 df_crd['image_filepath'] = df_crd_source_dir + df_crd.filename
 
@@ -51,7 +51,7 @@ df_crd['webm_latitude'] = df_crd.lat.apply(lat2y)
 tooltip_html = """
 <div style="border: 2px solid black;">
 <div>
-    <div style="font-size: 15px;">Predicted Class: @pred_class</div>
+
     <div style="font-size: 24px;">Location: @lat @lon</div>
 </div>
     <div>
