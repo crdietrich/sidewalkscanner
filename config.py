@@ -44,4 +44,5 @@ momentum = 0.2
 k_folds = 1
 epochs = 100
 batch_size = 32
-frozen_layers = 5  # or number of layers
+frozen_layers = 5  # number of layers to freeze, for none set -1
+last_layers_frozen = 0

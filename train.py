@@ -95,21 +95,21 @@ def find_max_batch(n_samples, max_size=33, verbose=False):
     return max_batch_size
 
 
-def build_model_VGG16(verbose=False):
-    """Build a model based on VGG16 and ImageNet weights."""
+def build_model_VGG16(frozen_layers=0, verbose=False):
+    """Build a model based on VGG16 and ImageNet weights.
+
+    Parameters
+    ----------
+    frozen_layers : int, number of output layers to freeze
+    verbose : bool, print debug statements and model layer graph
+    """
     base_model = applications.VGG16(weights='imagenet',
                                     include_top=False,
                                     input_shape=config.input_shape)
 
-    # Freeze the layers which you don't want to train. Here I am freezing the first 5 layers.
-    # for layer in model.layers[:5]:
-    # https://medium.com/@14prakash/transfer-learning-using-keras-d804b2e04ef8
-
-    n_layers = len(base_model.layers)
-    if config.frozen_layers != 'all':
-        n_layers = config.frozen_layers
-    for layer in base_model.layers[:n_layers]:
-        layer.trainable = False
+    if frozen_layers != 0:
+        for layer in base_model.layers[:(-1*frozen_layers)+1]:
+            layer.trainable = False
 
     top_model = Sequential()
     top_model.add(Flatten(input_shape=base_model.output_shape[1:]))
@@ -131,21 +131,21 @@ def build_model_VGG16(verbose=False):
     return model
 
 
-def build_model_inceptionV3(freeze=-1, verbose=False):
-    """Build a model based on VGG16 and ImageNet weights."""
+def build_model_inceptionV3(frozen_layers=0, verbose=False):
+    """Build a model based on VGG16 and ImageNet weights.
+
+    Parameters
+    ----------
+    frozen_layers : int, number of output layers to freeze
+    verbose : bool, print debug statements and model layer graph
+    """
     base_model = applications.inception_v3.InceptionV3(weights='imagenet',
                                                        include_top=False,
                                                        input_shape=config.input_shape)
 
-    # Freeze the layers which you don't want to train. Here I am freezing the first 5 layers.
-    # for layer in model.layers[:5]:
-    # https://medium.com/@14prakash/transfer-learning-using-keras-d804b2e04ef8
-
-    #n_layers = len(base_model.layers)
-    #if config.frozen_layers != 'all':
-    #    n_layers = config.frozen_layers
-    for layer in base_model.layers[:config.frozen_layers]:
-        layer.trainable = False
+    if frozen_layers != 0:
+        for layer in base_model.layers[:(-1*frozen_layers)+1]:
+            layer.trainable = False
 
     top_model = Sequential()
     top_model.add(Flatten(input_shape=base_model.output_shape[1:]))
