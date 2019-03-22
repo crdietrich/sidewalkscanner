@@ -7,14 +7,10 @@ import pickle
 import numpy as np
 import sklearn.metrics # import confusion_matrix, f1_score, precision_score, recall_score
 from datetime import datetime
-from keras import Model, applications
 from keras.preprocessing.image import ImageDataGenerator
-from keras import optimizers
-from keras.models import Sequential
-from keras.layers import Flatten, Dense
 from keras.callbacks import ModelCheckpoint, Callback, TensorBoard
 
-import config
+import config, models
 
 
 class CallbackMetrics(Callback):
@@ -95,76 +91,7 @@ def find_max_batch(n_samples, max_size=33, verbose=False):
     return max_batch_size
 
 
-def build_model_VGG16(frozen_layers=0, verbose=False):
-    """Build a model based on VGG16 and ImageNet weights.
 
-    Parameters
-    ----------
-    frozen_layers : int, number of output layers to freeze
-    verbose : bool, print debug statements and model layer graph
-    """
-    base_model = applications.VGG16(weights='imagenet',
-                                    include_top=False,
-                                    input_shape=config.input_shape)
-
-    if frozen_layers != 0:
-        for layer in base_model.layers[:(-1*frozen_layers)+1]:
-            layer.trainable = False
-
-    top_model = Sequential()
-    top_model.add(Flatten(input_shape=base_model.output_shape[1:]))
-    top_model.add(Dense(256, activation='relu'))
-    top_model.add(Dense(1, activation='sigmoid'))
-
-    model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
-    model.compile(loss='binary_crossentropy',
-                  optimizer=optimizers.SGD(lr=config.learning_rate, momentum=config.momentum),
-                  metrics=['accuracy'])
-
-    if verbose:
-        print('Trainable Layer Summary')
-        print('=======================')
-        for layer in model.layers:
-            conf = layer.get_config()
-            print(conf['name'], '\t : ', layer.trainable)
-
-    return model
-
-
-def build_model_inceptionV3(frozen_layers=0, verbose=False):
-    """Build a model based on VGG16 and ImageNet weights.
-
-    Parameters
-    ----------
-    frozen_layers : int, number of output layers to freeze
-    verbose : bool, print debug statements and model layer graph
-    """
-    base_model = applications.inception_v3.InceptionV3(weights='imagenet',
-                                                       include_top=False,
-                                                       input_shape=config.input_shape)
-
-    if frozen_layers != 0:
-        for layer in base_model.layers[:(-1*frozen_layers)+1]:
-            layer.trainable = False
-
-    top_model = Sequential()
-    top_model.add(Flatten(input_shape=base_model.output_shape[1:]))
-    top_model.add(Dense(256, activation='relu'))
-    top_model.add(Dense(1, activation='sigmoid'))
-
-    model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
-    model.compile(loss='binary_crossentropy',
-                  optimizer=optimizers.SGD(lr=config.learning_rate, momentum=config.momentum),
-                  metrics=['accuracy'])
-
-    if verbose:
-        print('Trainable Layer Summary')
-        print('=======================')
-        for layer in model.layers:
-            conf = layer.get_config()
-            print(conf['name'], '\t : ', layer.trainable)
-
-    return model
 
 
 def build_generators(tune_batch_size=False):
@@ -274,7 +201,7 @@ def train_model(model, train_generator, validation_generator, model_description)
 def build_run(model_description, verbose=False):
     """Build and run model fit"""
 
-    model = build_model(verbose=verbose)
+    model = models.inceptionV3_transfer(verbose=verbose)
     train_gen, validation_gen, test_gen = build_generators()
     history = train_model(model=model,
                           train_generator=train_gen,
